@@ -46,68 +46,84 @@ function Nonce { [guid]::NewGuid().ToString() }
 function Timestamp { [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
 
 
-$target = Read-Host "Url (don't forget to add FUZZ)"
-$wordlist = Read-Host "Wordlist"
-$limit = Read-Host "Rate limit"
 
 $rawMachineName = [string]$env:COMPUTERNAME
 $uid = SHA256Base64 ($rawMachineName)
 
-Write-Host "`nstarting ffuf..."
 
-.\ffuf.exe -u $target -w $wordlist -rate $limit | Tee-Object -Variable ffufLine | ForEach-Object {
-    
-    Write-Host $_
-    
-    $line = $_.ToString()
-    $match = [regex]::Match($line, '(\S+)\s+\[Status:\s*(\d+),')
 
-    if ($match.Success) {
+function Run-Fuzz($target, $wordlist, $limit, $extensions) {
+    .\ffuf.exe -u $target -w $wordlist -rate $limit -e $extensions | Tee-Object -Variable ffufLine | ForEach-Object {
+            
+        Write-Host $_ -ForegroundColor Cyan
+            
+        $line = $_.ToString()
+        $match = [regex]::Match($line, '(\S+)\s+\[Status:\s*(\d+),')
 
-        $word = $match.Groups[1].Value -replace '[^\x20-\x7E]', ''
-        $status = [int]$match.Groups[2].Value
+        if ($match.Success) {
 
-        if ($status -in 200,301,302,403) {
+            $word = $match.Groups[1].Value -replace '[^\x20-\x7E]', ''
+            $status = [int]$match.Groups[2].Value
 
-            $url = $target -replace "FUZZ", $word
-            $baseUrl = $target -replace "FUZZ.*", "FUZZ"
+            if ($status -in 200,301,302,403) {
 
-            $payload = @{
-                word = $word
-                url = $url
-                baseUrl = $baseUrl
-                status = $status
-                wordlist = (Split-Path $wordlist -Leaf)
-                uid = $uid
-            }
+                $url = $target -replace "FUZZ", $word
+                $baseUrl = $target -replace "FUZZ.*", "FUZZ"
 
-            $payloadJson = $payload | ConvertTo-Json -Compress
+                $payload = @{
+                    word = $word
+                    url = $url
+                    baseUrl = $baseUrl
+                    status = $status
+                    wordlist = (Split-Path $wordlist -Leaf)
+                    uid = $uid
+                }
 
-            $payloadHash = SHA256Base64 $payloadJson
-            $ts = Timestamp
-            $nonce = Nonce
+                $payloadJson = $payload | ConvertTo-Json -Compress
 
-            $base = "$keyName.$ts.$nonce.$payloadHash"
-            $sig = HMAC $base $secret
+                $payloadHash = SHA256Base64 $payloadJson
+                $ts = Timestamp
+                $nonce = Nonce
 
-            $body = @{
-                key = $keyName
-                ts = $ts
-                nonce = $nonce
-                payload = $payloadJson
-                sig = $sig
-            }
+                $base = "$keyName.$ts.$nonce.$payloadHash"
+                $sig = HMAC $base $secret
 
-            $json = $body | ConvertTo-Json -Compress
+                $body = @{
+                    key = $keyName
+                    ts = $ts
+                    nonce = $nonce
+                    payload = $payloadJson
+                    sig = $sig
+                }
 
-            try {
-                $response = Invoke-RestMethod -Uri $webhook -Method Post -Body $json -ContentType "application/json" -MaximumRedirection 5
+                $json = $body | ConvertTo-Json -Compress
 
-                Write-Host "`n[+] RESPONSE:" $response -ForegroundColor Green | ConvertTo-Json -Depth 10 
-            }
-            catch {
-                Write-Host "`n" "[X] ERROR:" $_.Exception.Message -ForegroundColor Red
+                try {
+                    $response = Invoke-RestMethod -Uri $webhook -Method Post -Body $json -ContentType "application/json" -MaximumRedirection 5
+                    Write-Host "`n[+] RESPONSE:" $response -ForegroundColor Green
+                }
+                catch {
+                    Write-Host "`n[X] ERROR:" $_.Exception.Message -ForegroundColor Red
+                }
             }
         }
     }
 }
+
+
+do {
+    $target = Read-Host "Url (don't forget FUZZ)"
+    $wordlist = Read-Host "Wordlist"
+    $limit = Read-Host "Rate limit"
+
+    $extInput = Read-Host "Extensions (comma separated, optional)"
+    if (![string]::IsNullOrWhiteSpace($extInput)) {
+        $extInput = ($extInput -split "," | ForEach-Object { $_.Trim() }) -join "," # Trim and clean input
+    }
+
+    Write-Host "`nstarting ffuf..."
+    Run-Fuzz $target $wordlist $limit $extInput
+
+    $again = Read-Host "`nRun again with another wordlist/extensions? (y/n)"
+
+} while ($again -match '^(y|yes)$')
