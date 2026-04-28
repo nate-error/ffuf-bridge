@@ -29,13 +29,14 @@ $config = Load-Or-CreateConfig
 $keyName = $config.KeyName
 $secret  = $config.Secret
 
-
 function HMAC($msg, $key) {
     $h = New-Object System.Security.Cryptography.HMACSHA256
     $h.Key = [Text.Encoding]::UTF8.GetBytes($key)
     ($h.ComputeHash([Text.Encoding]::UTF8.GetBytes($msg)) | ForEach-Object { $_.ToString("x2") }) -join ""
 }
 
+# This is a one way operation: the original input (here, your computer name) cannot be retrieved from the hash
+# Used to avoid storing the raw computer name
 function SHA256Base64($t) {
     $s = [System.Security.Cryptography.SHA256]::Create()
     [Convert]::ToBase64String($s.ComputeHash([Text.Encoding]::UTF8.GetBytes($t)))
@@ -48,6 +49,9 @@ function Timestamp { [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
 $target = Read-Host "Url (don't forget to add FUZZ)"
 $wordlist = Read-Host "Wordlist"
 $limit = Read-Host "Rate limit"
+
+$rawMachineName = [string]$env:COMPUTERNAME
+$uid = SHA256Base64 ($rawMachineName)
 
 Write-Host "`nstarting ffuf..."
 
@@ -74,6 +78,7 @@ Write-Host "`nstarting ffuf..."
                 baseUrl = $baseUrl
                 status = $status
                 wordlist = (Split-Path $wordlist -Leaf)
+                uid = $uid
             }
 
             $payloadJson = $payload | ConvertTo-Json -Compress
@@ -96,12 +101,12 @@ Write-Host "`nstarting ffuf..."
             $json = $body | ConvertTo-Json -Compress
 
             try {
-                $response = Invoke-RestMethod -Uri $webhook -Method Post -Body $json -ContentType "application/json"
+                $response = Invoke-RestMethod -Uri $webhook -Method Post -Body $json -ContentType "application/json" -MaximumRedirection 5
 
-                Write-Host "\n[+] RESPONSE:" $response | ConvertTo-Json -Depth 10
+                Write-Host "`n[+] RESPONSE:" $response -ForegroundColor Green | ConvertTo-Json -Depth 10 
             }
             catch {
-                Write-Host "\n[X] ERROR:" $_.Exception.Message
+                Write-Host "`n" "[X] ERROR:" $_.Exception.Message -ForegroundColor Red
             }
         }
     }
