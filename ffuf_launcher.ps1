@@ -53,7 +53,17 @@ $uid = SHA256Base64 ($rawMachineName)
 
 
 function Run-Fuzz($target, $wordlist, $limit, $extensions) {
-    .\ffuf.exe -u $target -w $wordlist -rate $limit -e $extensions | Tee-Object -Variable ffufLine | ForEach-Object {
+    $ffufArgs = @(
+        "-u", $target,
+        "-w", $wordlist,
+        "-rate", $limit
+    )
+
+    if (![string]::IsNullOrWhiteSpace($extensions)) {
+        $ffufArgs += @("-e", $extensions)
+    }
+
+    .\ffuf.exe @ffufArgs | Tee-Object -Variable ffufLine | ForEach-Object {
             
         Write-Host $_ -ForegroundColor Cyan
             
