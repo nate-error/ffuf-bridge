@@ -55,7 +55,7 @@ try {
 
     # Save new version file if changes were made
     if ($NeedsUpdate) {
-        $LocalData.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Out-File $VersionFile
+        $LocalData.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Out-File "BridgeFiles/$VersionFile"
         Write-Host "Update complete." -ForegroundColor Green
 
     } else {
