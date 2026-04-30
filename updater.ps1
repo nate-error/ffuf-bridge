@@ -4,32 +4,50 @@ $VersionFile = "version.txt"
 
 Write-Host "Checking for updates..." -ForegroundColor Gray
 
+$NeedsUpdate = $false
+
+$RemoteVer = $null
+$LocalVer = $null
+
 try {
     # Get Remote Manifest
-    $RemoteData = Invoke-RestMethod -Uri "$RepoUrl/$ManifestFile" -UseBasicParsing | ConvertFrom-StringData
+    $Raw = Invoke-WebRequest -Uri "$RepoUrl/$ManifestFile" -UseBasicParsing
+    $RemoteData = $Raw.Content | ConvertFrom-StringData
     
     # Get Local Versions
     $LocalData = @{}
-    if (Test-Path $VersionFile) {
-        $LocalData = Get-Content $VersionFile | ConvertFrom-StringData
-    }
 
-    $NeedsUpdate = $false
+    if (Test-Path $VersionFile) {
+        Get-Content $VersionFile | ForEach-Object {
+            if ($_ -match "^\s*([^=]+)\s*=\s*(.+)\s*$") {
+                $LocalData[$matches[1]] = $matches[2].Trim()
+            }
+        }
+    }
 
     # Compare and Download
     foreach ($Key in $RemoteData.Keys) {
-        $RemoteVer = [double]$RemoteData[$Key]
-        $LocalVer  = if ($LocalData.ContainsKey($Key)) { [double]$LocalData[$Key] } else { 0 }
+
+        $RemoteValue = $RemoteData[$Key].Trim()
+
+        if (-not [version]::TryParse($RemoteValue, [ref]$RemoteVer)) {
+            continue
+        }
+
+        $LocalValue = if ($LocalData.ContainsKey($Key)) { $LocalData[$Key] } else { "0.0.0" }
+
+        if (-not [version]::TryParse($LocalValue, [ref]$LocalVer)) {
+            $LocalVer = [version]"0.0.0"
+        }
 
         if ($RemoteVer -gt $LocalVer) {
-            # Determine actual filename
+
             $FileName = if ($Key -eq "batch") { "launcher_launcher.bat" } else { "ffuf_launcher.ps1" }
-            
-            Write-Host "Updating $FileName to v$RemoteVer..." -ForegroundColor Yellow
-            
-            $Url = "$RepoUrl/$FileName"
-            Invoke-WebRequest -Uri $Url -OutFile ".\$FileName"
-            
+
+            Write-Host "Updating $FileName ($LocalVer → $RemoteVer)..." -ForegroundColor Yellow
+
+            Invoke-WebRequest "$RepoUrl/$FileName" -OutFile ".\$FileName"
+
             $LocalData[$Key] = $RemoteVer.ToString()
             $NeedsUpdate = $true
         }
@@ -40,13 +58,10 @@ try {
         $LocalData.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Out-File $VersionFile
         Write-Host "Update complete." -ForegroundColor Green
 
-        Write-Host "Restarting launcher..." -ForegroundColor Cyan
-        Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -NoProfile -File `"launcher_launcher.bat`""
-
     } else {
         Write-Host "Everything is up to date." -ForegroundColor Gray
     }
 
 } catch {
-    Write-Warning "Could not connect to update server. Starting in offline mode..."
+    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
 }
