@@ -1,4 +1,4 @@
-$RepoUrl = "https://raw.githubusercontent.com/nate-error/ffuf-bridge/master/BridgeFiles"
+$RepoUrl = "https://raw.githubusercontent.com/nate-error/ffuf-bridge/master"
 $ManifestFile = "manifest.txt"
 $VersionFile = "version.txt"
 
@@ -11,7 +11,7 @@ $LocalVer = $null
 
 try {
     # Get Remote Manifest
-    $Raw = Invoke-WebRequest -Uri "$RepoUrl/$ManifestFile" -UseBasicParsing
+    $Raw = Invoke-WebRequest -Uri "$RepoUrl/BridgeFiles/$ManifestFile" -UseBasicParsing
     $RemoteData = $Raw.Content | ConvertFrom-StringData
     
     # Get Local Versions
@@ -42,7 +42,7 @@ try {
 
         if ($RemoteVer -gt $LocalVer) {
 
-            $FileName = if ($Key -eq "batch") { "launcher_launcher.bat" } else { "ffuf_launcher.ps1" }
+            $FileName = if ($Key -eq "batch") { "bridge_launcher.bat" } else { "BridgeFiles/ffuf_launcher.ps1" }
 
             Write-Host "Updating $FileName ($LocalVer → $RemoteVer)..." -ForegroundColor Yellow
 
