@@ -39,6 +39,10 @@ try {
     if ($NeedsUpdate) {
         $LocalData.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" } | Out-File $VersionFile
         Write-Host "Update complete." -ForegroundColor Green
+
+        Write-Host "Restarting launcher..." -ForegroundColor Cyan
+        Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -NoProfile -File `"launcher_launcher.bat`""
+
     } else {
         Write-Host "Everything is up to date." -ForegroundColor Gray
     }
