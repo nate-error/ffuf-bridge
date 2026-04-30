@@ -1,4 +1,4 @@
-$RepoUrl = "https://raw.githubusercontent.com/nate-error/ffuf-bridge/master"
+$RepoUrl = "https://raw.githubusercontent.com/nate-error/ffuf-bridge/master/BridgeFiles"
 $ManifestFile = "manifest.txt"
 $VersionFile = "version.txt"
 
