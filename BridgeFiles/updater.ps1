@@ -17,7 +17,7 @@ try {
     # Get Local Versions
     $LocalData = @{}
 
-    if (Test-Path $VersionFile) {
+    if (Test-Path "BridgeFiles/$VersionFile") {
         Get-Content "BridgeFiles/$VersionFile" | ForEach-Object {
             if ($_ -match "^\s*([^=]+)\s*=\s*(.+)\s*$") {
                 $LocalData[$matches[1]] = $matches[2].Trim()
